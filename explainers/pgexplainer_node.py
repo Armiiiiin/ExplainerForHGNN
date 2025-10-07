@@ -24,29 +24,54 @@ class PGExplainerNodeCore(ExplainerCore):
         self.hooked_embeddings = None
 
     def _register_embedding_hook(self, model):
-        """Register hook to capture embeddings from the second-to-last layer"""
-        # Remove any existing hook
+        """Register hook plus layer detection"""
         if self.embeddings_hook is not None:
             self.embeddings_hook.remove()
-
-        # Get all children modules
+    
+        # > save all intermidiate outputs
+        self.all_outputs = []
+    
+        def hook_fn(module, input, output):
+            self.hooked_embeddings = output.detach()
+            self.all_outputs.append((module.__class__.__name__, output.shape if hasattr(output, 'shape') else 'no shape'))
+    
+        # > 1. search by name
+        for name, module in model.named_modules():
+            if any(keyword in name.lower() for keyword in ['embed', 'feature', 'hidden', 'encoder']):
+                print(f"Trying to hook layer: {name}")
+                self.embeddings_hook = module.register_forward_hook(hook_fn)
+                with torch.no_grad():
+                    test_output = model.custom_forward(lambda m: self.extract_neighbors_input())
+                    if self.hooked_embeddings is not None:
+                        print(f"Successfully hooked layer: {name}")
+                        return
+                    else:
+                        self.embeddings_hook.remove()
+                        self.hooked_embeddings = None
+    
+        # > 2. search by dims
+        modules_list = list(model.modules())
+        for i, module in enumerate(modules_list):
+            if isinstance(module, (nn.Linear, nn.Sequential)) and i < len(modules_list) - 1:
+                self.embeddings_hook = module.register_forward_hook(hook_fn)
+                with torch.no_grad():
+                    test_output = model.custom_forward(lambda m: self.extract_neighbors_input())
+                    if self.hooked_embeddings is not None and len(self.hooked_embeddings.shape) == 2:
+                        print(f"Successfully hooked module at index {i}: {module.__class__.__name__}")
+                        return
+                    else:
+                        self.embeddings_hook.remove()
+                        self.hooked_embeddings = None
+    
+        # > fallback
         children = list(model.children())
-
-        # Find the second-to-last layer (before final classifier)
-        # Assuming the last layer is the classifier
         if len(children) >= 2:
             embedding_layer = children[-2]
         else:
-            # If model structure is different, try to find the right layer
-            # This is a fallback - you may need to adjust based on your model
             embedding_layer = children[-1]
-
-        # Define hook function
-        def hook_fn(module, input, output):
-            self.hooked_embeddings = output.detach()
-
-        # Register the hook
+    
         self.embeddings_hook = embedding_layer.register_forward_hook(hook_fn)
+        print(f"Fallback: hooked {embedding_layer.__class__.__name__}")
 
     def _get_embeddings_with_hook(self, gs, features):
         """Get embeddings using the registered hook"""
