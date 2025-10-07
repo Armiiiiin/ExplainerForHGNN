@@ -463,7 +463,7 @@ class PGExplainerNodeCore(ExplainerCore):
         self.init_params_node_level(train_nodes)
     
         # Create optimizer ONCE
-        optimizer = torch.optim.Adam(self.elayers.parameters(), lr=self.config.get("opt_lr", 0.01))
+        optimizer = torch.optim.Adam(self.elayers.parameters(), lr=self.config.get("opt_lr", 0.003))
     
         # Track first node for debugging
         self.debug_node = train_nodes[0]
