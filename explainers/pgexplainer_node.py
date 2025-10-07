@@ -20,6 +20,45 @@ class PGExplainerNodeCore(ExplainerCore):
         # > initialize subgraph cache
         self.subgraph_cache = {}
         #self.device_string = 'cuda' if torch.cuda.is_available() else 'cpu' # AttributeError: can't set attribute 'device_string'
+        self.embeddings_hook = None
+        self.hooked_embeddings = None
+
+    def _register_embedding_hook(self, model):
+        """Register hook to capture embeddings from the second-to-last layer"""
+        # Remove any existing hook
+        if self.embeddings_hook is not None:
+            self.embeddings_hook.remove()
+
+        # Get all children modules
+        children = list(model.children())
+
+        # Find the second-to-last layer (before final classifier)
+        # Assuming the last layer is the classifier
+        if len(children) >= 2:
+            embedding_layer = children[-2]
+        else:
+            # If model structure is different, try to find the right layer
+            # This is a fallback - you may need to adjust based on your model
+            embedding_layer = children[-1]
+
+        # Define hook function
+        def hook_fn(module, input, output):
+            self.hooked_embeddings = output.detach()
+
+        # Register the hook
+        self.embeddings_hook = embedding_layer.register_forward_hook(hook_fn)
+
+    def _get_embeddings_with_hook(self, gs, features):
+        """Get embeddings using the registered hook"""
+        with torch.no_grad():
+            # Run forward pass - hook will capture embeddings
+            _ = self.model.custom_forward(lambda m: (gs, features))
+            embeddings = self.hooked_embeddings
+
+            # Clear for next use
+            self.hooked_embeddings = None
+
+        return embeddings
 
     def init_params_node_level(self, train_nodes=None):
         """
