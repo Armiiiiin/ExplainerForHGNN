@@ -282,14 +282,19 @@ class PGExplainerNodeCore(ExplainerCore):
             features = cached['features']
             embeddings = cached['embeddings'].to(self.device)  # Use pre-computed embeddings
         else:
-            # Fall back to computing embeddings on the fly
             gs, features = self.extract_neighbors_input()
-            with torch.no_grad():
-                embeddings = self.model.embedding(lambda m: (gs, features))
-                embeddings = embeddings.detach()
+            #with torch.no_grad():
+            #    embeddings = self.model.embedding(lambda m: (gs, features))
+            #    embeddings = embeddings.detach()
+
+            # > Make sure hook is registered
+            if self.embeddings_hook is None:
+                self._register_embedding_hook(self.model)
+
+            embeddings = self._get_embeddings_with_hook(gs, features)
         
-        # > organize the data type
-        #target_dtype = self.elayers[0].weight.dtype
+        # > normalize embeddings
+        embeddings = F.normalize(embeddings, p=2, dim=1)
         target_dtype = torch.float32
         g0 = gs[0].coalesce()
         edge_index = g0.indices().long()
@@ -319,11 +324,11 @@ class PGExplainerNodeCore(ExplainerCore):
         if self.node_id == self.debug_node and hasattr(self, 'current_epoch'):
             print(f"Epoch {self.current_epoch}: Raw values min={values.min():.4f}, max={values.max():.4f}, mean={values.mean():.4f}")
         # Use temperature starting high and decreases
-        temperature = 1.0 if not hasattr(self, 'current_epoch') else max(0.1, 1.0 - self.current_epoch * 0.02)
+        #temperature = 1.0 if not hasattr(self, 'current_epoch') else max(0.1, 1.0 - self.current_epoch * 0.02)
 
         #sampled = self.concrete_sample(values, beta=self.tmp, training=True).to(target_dtype)
-        #sampled = self.concrete_sample(values, beta=self.tmp, training=True)
-        sampled = self.concrete_sample(values, beta=temperature, training=True)
+        sampled = self.concrete_sample(values, beta=self.tmp, training=True)
+        #sampled = self.concrete_sample(values, beta=temperature, training=True)
 
         if self.node_id == self.debug_node and hasattr(self, 'current_epoch'):
             print(f"  Sampled mask min={sampled.min():.4f}, max={sampled.max():.4f}, mean={sampled.mean():.4f}")
@@ -348,6 +353,11 @@ class PGExplainerNodeCore(ExplainerCore):
         self.adj_tensor = adj
         
         return self.get_loss(self.pred)
+
+    def __del__(self):
+        """Clean up hook when object is destroyed"""
+        if hasattr(self, 'embeddings_hook') and self.embeddings_hook is not None:
+            self.embeddings_hook.remove()
 
     def get_loss(self, output, mask=None):
         return self.get_loss_node_level(output, mask)
