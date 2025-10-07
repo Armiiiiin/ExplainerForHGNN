@@ -74,11 +74,18 @@ class PGExplainerNodeCore(ExplainerCore):
         gs, features = self.extract_neighbors_input()
 
         # > get the actual embedding dimension from the model
-        with torch.no_grad():
-            embeddings = self.model.embedding(lambda m: (gs, features))
-            self.embedding_dim = embeddings.shape[1]  # > use embedding dimension not feature dimension
+        #with torch.no_grad():
+            #embeddings = self.model.embedding(lambda m: (gs, features))
+            #self.embedding_dim = embeddings.shape[1]  # > use embedding dimension not feature dimension
             #self.embedding_dim = features.shape[1]
-        print(f"Embedding dimension: {self.embedding_dim}")
+        
+        # > Register hook on the model
+        self._register_embedding_hook(self.model)
+
+        # > Get embedding dimension using hook
+        embeddings = self._get_embeddings_with_hook(gs, features)
+        self.embedding_dim = embeddings.shape[1]
+        print(f"Embedding dimension (from hook): {self.embedding_dim}")
         
         # > define a 2-layer MLP to predict the importance of each edge
         self.elayers = nn.Sequential(
@@ -90,7 +97,8 @@ class PGExplainerNodeCore(ExplainerCore):
         # > better MLP initialization
         for layer in self.elayers:
             if isinstance(layer, nn.Linear):
-                nn.init.xavier_uniform_(layer.weight, gain=0.1)
+                #nn.init.xavier_uniform_(layer.weight, gain=0.1)
+                nn.init.xavier_normal_(layer.weight)
         #        if layer.out_features == 1:
         #            # > initialize final layer to output positive values
         #            nn.init.constant_(layer.bias, 1.0)
@@ -101,11 +109,11 @@ class PGExplainerNodeCore(ExplainerCore):
 
         # > loss coefficients
         self.tmp = self.config.get("tmp", 0.1)
-        self.sample_bias = self.config.get("sample_bias", 0.2)
+        self.sample_bias = self.config.get("sample_bias", 0.0)
         self.coeffs = {
-            "size": self.config.get("coff_size", 0.01),
-            "weight_decay": self.config.get("weight_decay", 0.005),
-            "ent": self.config.get("coff_ent", 0.1),
+            "size": self.config.get("coff_size", 0.0001),
+            "weight_decay": self.config.get("weight_decay", 0.0),
+            "ent": self.config.get("coff_ent", 0.01),
             "connect": self.config.get("coff_connect", 0.0),
             "budget": self.config.get("budget", -1)
         }
