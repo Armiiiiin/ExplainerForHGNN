@@ -124,6 +124,9 @@ class PGExplainerNodeCore(ExplainerCore):
         """
         print(f"Caching subgraphs for {len(node_list)} nodes...")
 
+        # > register hook once
+        self._register_embedding_hook(self.model)
+
         # > Pre-compute all embeddings ONCE
         with torch.no_grad():
             for i, node_id in enumerate(node_list):
@@ -134,18 +137,19 @@ class PGExplainerNodeCore(ExplainerCore):
                     self.node_id = node_id
                     # > clear the previously cached 
                     self._clear_node_cache()
-                    # > construct and cache the subgraph
+                    # > Extract subgraph
                     gs, features = self._extract_and_cache_neighbors(node_id)
 
                     # > pre-compute embeddings for this subgraph
-                    embeddings = self.model.embedding(lambda m: (gs, features))
-                    embeddings = embeddings.detach().cpu()  # store as CPU tensor
+                    #embeddings = self.model.embedding(lambda m: (gs, features))
+                    #embeddings = embeddings.detach().cpu()  # store as CPU tensor
+                    embeddings = self._get_embeddings_with_hook(gs, features)
 
                     # > cache the infos
                     self.subgraph_cache[node_id] = {
                         'gs': gs,
                         'features': features,
-                        'embeddings': embeddings,
+                        'embeddings': embeddings.cpu(),
                         'mapped_node_id': self.mapping_node_id(),
                         'used_nodes': getattr(self, 'used_nodes', None),
                         'recovery_dict': getattr(self, 'recovery_dict', None),
