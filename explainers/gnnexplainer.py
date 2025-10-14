@@ -587,6 +587,10 @@ class GNNExplainerMeta(Explainer):
 
         self.evaluate()
 
+        if 'metapath_necessity' in self.config.get('eval_metrics', []) or \
+            'uniform_attention_performance' in self.config.get('eval_metrics', []):
+            self.compute_metapath_explanation_scores()
+
         self.save_summary()
 
         return self.eval_result

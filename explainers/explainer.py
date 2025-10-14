@@ -1,3 +1,5 @@
+import torch
+
 class ExplainerCore:
     def __init__(self, config):
         self.config = config
@@ -284,3 +286,54 @@ class Explainer:
         :return:
         """
         return ExplainerCore
+
+    def get_metapath_removal_handle_fn(self, metapath_id_to_remove):
+        """
+        Generate input handle function for removing a specific meta-path.
+        Used for meta-path necessity ablation study.
+
+        :param metapath_id_to_remove: Index of the meta-path to remove
+        :return: Input handle function
+        """
+        def input_handle_fn(model):
+            gs, features = model.standard_input()
+
+            # > Remove the specified meta-path by replacing with zero matrix
+            masked_gs = []
+            for i, g in enumerate(gs):
+                if i == metapath_id_to_remove:
+                    # Create zero matrix to remove this meta-path
+                    masked_gs.append(torch.zeros_like(g).to(self.device_string))
+                else:
+                    masked_gs.append(g)
+
+            return masked_gs, features
+
+        return input_handle_fn
+    def get_uniform_attention_handle_fn(self):
+        """
+        Generate input handle function for uniform attention.
+        Used for testing the importance of learned attention mechanism.
+
+        :return: Input handle function
+        """
+        def input_handle_fn(model):
+            gs, features = model.standard_input()
+
+            # > Set uniform attention weights for all meta paths
+            num_metapaths = len(gs)
+            if num_metapaths > 0:
+                uniform_weights = torch.ones(num_metapaths) / num_metapaths
+                uniform_weights = uniform_weights.to(self.device_string)
+
+                # > Try different ways to set attention based on model implementation
+                if hasattr(model, 'set_uniform_attention'):
+                    model.set_uniform_attention()
+                elif hasattr(model, 'set_attention_weights'):
+                    model.set_attention_weights(uniform_weights)
+                elif hasattr(model, 'attention_weights'):
+                    model.attention_weights = uniform_weights
+
+            return gs, features
+
+        return input_handle_fn

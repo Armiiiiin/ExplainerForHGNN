@@ -85,18 +85,89 @@ class PGExplainerNodeCore(ExplainerCore):
 
         return embeddings
 
+    def print_model_structure(self, model):
+        """Print model structure to understand where to hook"""
+        print("\n" + "="*50)
+        print("MODEL STRUCTURE ANALYSIS")
+        print("="*50)
+
+        # 1. Print children modules
+        print("\n1. Direct Children:")
+        for i, (name, child) in enumerate(model.named_children()):
+            print(f"  [{i}] {name}: {child.__class__.__name__}")
+
+        # 2. Print all modules with their names
+        print("\n2. All Named Modules:")
+        for name, module in model.named_modules():
+            if name:  # Skip root
+                print(f"  {name}: {module.__class__.__name__}")
+
+        # 3. Try forward pass and capture all intermediate outputs
+        print("\n3. Forward Pass Output Shapes:")
+        outputs_info = []
+        hooks = []
+
+        def make_hook(name):
+            def hook_fn(module, input, output):
+                if hasattr(output, 'shape'):
+                    outputs_info.append((name, output.shape))
+                else:
+                    outputs_info.append((name, type(output).__name__))
+            return hook_fn
+
+        # Register hooks on all modules
+        for name, module in model.named_modules():
+            if name:
+                hook = module.register_forward_hook(make_hook(name))
+                hooks.append(hook)
+
+        # Do a test forward pass
+        with torch.no_grad():
+            if hasattr(self, 'node_id'):
+                gs, features = self.extract_neighbors_input()
+            else:
+                # Use first node temporarily
+                train_nodes = [node for node, _ in model.dataset.labels[0]]
+                self.node_id = train_nodes[0] if train_nodes else 0
+                gs, features = self.extract_neighbors_input()
+
+            _ = model.custom_forward(lambda m: (gs, features))
+
+        # Print captured outputs
+        for name, shape in outputs_info:
+            print(f"  {name}: {shape}")
+
+        # Clean up hooks
+        for hook in hooks:
+            hook.remove()
+
+        print("="*50)
+        print("\n")
+
+        return outputs_info
+
+
     def init_params_node_level(self, train_nodes=None):
         """
         Initialize explainer MLP and cache all training subgraphs
         """
+        # > get the feature dims with the 1st node
+        if train_nodes:
+            self.node_id = train_nodes[0]
+
+
         # > if the train node list is provided, cache all subgraphs in advance
         if train_nodes is not None:
             self._cache_all_subgraphs(train_nodes)
         
         # > get the feature dims with the 1st node
-        if train_nodes:
-            self.node_id = train_nodes[0]
+        #if train_nodes:
+        #    self.node_id = train_nodes[0]
         gs, features = self.extract_neighbors_input()
+
+        # > Analyze model structure
+
+        outputs_info = self.print_model_structure(self.model)
 
         # > get the actual embedding dimension from the model
         #with torch.no_grad():

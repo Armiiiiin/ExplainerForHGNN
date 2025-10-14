@@ -133,6 +133,79 @@ def graph_exp_stability_edge_explanation_combined(node_explanations, explainer):
         node_explanations.control_data.update({'top_k_for_stability_edge': k})
     return node_explanations
 
+def metapath_necessity_explanation_combined(node_explanations, explainer):
+    """
+    prepare for meta-path necessity study
+    """
+    if hasattr(node_explanations, 'metapath_removal_results'):
+        return node_explanations
+
+    print("Running meta-path necessity study (removing each meta-path)")
+
+    # > original performace
+    original_pred = explainer.model.forward()
+    original_pred_hard = original_pred.argmax(dim=-1)
+    test_nodes = explainer.model.dataset.labels[2]
+    test_nodes_idx = [node[0] for node in test_nodes]
+    test_labels = torch.tensor([node[1] for node in test_nodes]).to(explainer.device_string)
+
+    original_acc = (original_pred_hard[test_nodes_idx] == test_labels).float().mean().item()
+
+    # > individually remove meta paths
+    metapath_removed_accuracies[[I = {}
+    num_metapaths = len(explainer.model.get_metapaths()) if hasattr(explainer.model, 'get_metapaths') else 0
+
+    for mp_id in range(num_metapaths):
+        # > build mask: remove mp_id th mata path
+        removed_pred = explainer.model.custom_forward(
+            explainer.get_metapath_removal_handle_fn(mp_id)
+        )
+        removed_pred_hard = removed_pred.argmax(dim=-1)
+        removed_acc = (removed_pred_hard[test_nodes_idx] == test_labels).float().mean().item()
+        metapath_removed_accuracies[mp_id] = removed_acc
+
+    # > save results
+    node_explanations.metapath_removal_results = {
+        'original_accuracy': original_acc,
+        'metapath_removed_accuracies': metapath_removed_accuracies
+    }
+
+    return node_explanations
+
+
+def uniform_attention_explanation_combined(node_explanations, explainer):
+    """
+    performance when attention is uniform
+    """
+    if hasattr(node_explanations, 'uniform_attention_results'):
+        return node_explanations
+
+    print("Testing uniform attention...")
+
+    # > original performance
+    original_pred = explainer.model.forward()
+    original_pred_hard = original_pred.argmax(dim=-1)
+    test_nodes = explainer.model.dataset.labels[2]
+    test_nodes_idx = [node[0] for node in test_nodes]
+    test_labels = torch.tensor([node[1] for node in test_nodes]).to(explainer.device_string)
+
+    original_acc = (original_pred_hard[test_nodes_idx] == test_labels).float().mean().item()
+
+    # > apply uniform attention
+    uniform_pred = explainer.model.custom_forward(
+        explainer.get_uniform_attention_handle_fn()
+    )
+    uniform_pred_hard = uniform_pred.argmax(dim=-1)
+    uniform_acc = (uniform_pred_hard[test_nodes_idx] == test_labels).float().mean().item()
+
+    node_explanations.uniform_attention_results = {
+        'original_accuracy': original_acc,
+        'uniform_attention_accuracy': uniform_acc
+    }
+
+    return node_explanations
+
+
 
 prepare_combined_explanation_fn_for_node_dataset_scores = {
     'fidelity_neg': identity_explanation_combined,

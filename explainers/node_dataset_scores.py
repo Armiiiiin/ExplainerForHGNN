@@ -367,6 +367,55 @@ def fidelity_model_core(masked, pred):
     comparison = [masked[i].eq(pred[i]) for i in range(len(masked))]
     return (sum(comparison) / len(comparison)).item()
 
+def metapath_necessity(node_explanations):
+    """
+    Meta-path necessity study: remove meta path one by one and test the impact on performance
+    
+    Returns a dict with:
+    metapath_importance: dict mapping metapath_id -> performance_drop when removed
+    avg_performance_drop: average performance drop across all metapaths
+    """
+    if not hasattr(node_explanations, 'metapath_removal_results'):
+        print("Warning: metapath_removal_results not found in node_explanations")
+        return {'metapath_importance': {}, 'avg_performance_drop': 0.0}
+    
+    results = node_explanations.metapath_removal_results
+    metapath_importance = {}
+    
+    original_acc = results.get('original_accuracy', 0.0)
+    
+    for mp_id, removed_acc in results.get('metapath_removed_accuracies', {}).items():
+        performance_drop = original_acc - removed_acc
+        metapath_importance[mp_id] = performance_drop
+    
+    avg_drop = sum(metapath_importance.values()) / len(metapath_importance) if metapath_importance else 0.0
+    
+    return {
+        'metapath_importance': metapath_importance,
+        'avg_performance_drop': avg_drop,
+        'original_accuracy': original_acc
+    }
+
+def uniform_attention_performance(node_explanations):
+    """
+    Test the performance of uniform attention (all meta-path weights are equal)
+    
+    Returns:
+    performance_gap: original_acc - uniform_attention_acc
+    """
+    if not hasattr(node_explanations, 'uniform_attention_results'):
+        print("Warning: uniform_attention_results not found")
+        return {'performance_gap': 0.0}
+    
+    results = node_explanations.uniform_attention_results
+    original_acc = results.get('original_accuracy', 0.0)
+    uniform_acc = results.get('uniform_attention_accuracy', 0.0)
+    
+    return {
+        'original_accuracy': original_acc,
+        'uniform_attention_accuracy': uniform_acc,
+        'performance_gap': original_acc - uniform_acc
+    }
 
 node_dataset_scores = {
     'fidelity_neg': fidelity_neg,
@@ -384,4 +433,6 @@ node_dataset_scores = {
     'roc_auc_score': roc_auc_score,
     'fidelity_pos_model': fidelity_pos_model,
     'fidelity_neg_model': fidelity_neg_model,
+    'metapath_necessity': metapath_necessity,
+    'uniform_attention_performance': uniform_attention_performance,
 }
