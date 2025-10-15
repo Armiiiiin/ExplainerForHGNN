@@ -152,7 +152,7 @@ def metapath_necessity_explanation_combined(node_explanations, explainer):
     original_acc = (original_pred_hard[test_nodes_idx] == test_labels).float().mean().item()
 
     # > individually remove meta paths
-    metapath_removed_accuracies[[I = {}
+    metapath_removed_accuracies = {}
     num_metapaths = len(explainer.model.get_metapaths()) if hasattr(explainer.model, 'get_metapaths') else 0
 
     for mp_id in range(num_metapaths):
@@ -221,4 +221,6 @@ prepare_combined_explanation_fn_for_node_dataset_scores = {
     'roc_auc_score': identity_explanation_combined,
     'fidelity_neg_model': identity_explanation_combined,
     'fidelity_pos_model': identity_explanation_combined,
+    'metapath_necessity': metapath_necessity_explanation_combined,
+    'uniform_attention_performance': uniform_attention_explanation_combined,
 }

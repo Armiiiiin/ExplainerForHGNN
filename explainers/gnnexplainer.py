@@ -198,7 +198,9 @@ class GNNExplainerMetaCore(ExplainerCore):
         explanation = NodeExplanation()
         explanation = standard_explanation(explanation, self)
         for metric in self.config['eval_metrics']:
-            prepare_explanation_fn_for_node_dataset_scores[metric](explanation, self)
+            # > only for the metrics defined in per-node dict
+            if metric in prepare_explanation_fn_for_node_dataset_scores:
+                prepare_explanation_fn_for_node_dataset_scores[metric](explanation, self)
         self.explanation = explanation
         return explanation
 
@@ -587,9 +589,9 @@ class GNNExplainerMeta(Explainer):
 
         self.evaluate()
 
-        if 'metapath_necessity' in self.config.get('eval_metrics', []) or \
-            'uniform_attention_performance' in self.config.get('eval_metrics', []):
-            self.compute_metapath_explanation_scores()
+        #if 'metapath_necessity' in self.config.get('eval_metrics', []) or \
+        #    'uniform_attention_performance' in self.config.get('eval_metrics', []):
+        #    self.compute_metapath_explanation_scores()
 
         self.save_summary()
 
