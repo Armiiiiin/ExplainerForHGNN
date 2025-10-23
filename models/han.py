@@ -466,7 +466,7 @@ class HAN(BaseModel):
         self.prepare_modules()
         self.to(self.device)
         self.support_multi_features = True
-        self.use_uniform_attention = use_uniform_attention
+        #self.use_uniform_attention = use_uniform_attention
 
     def prepare_modules(self):
         use_uniform = self.config.get("uniform_attention", False)

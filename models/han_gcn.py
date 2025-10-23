@@ -90,7 +90,8 @@ class HANGCNConv(nn.Module):
                 weight = self.weight
 
         if edge_weight is not None:
-            graph = graph.coleasce()
+            #graph = graph.coleasce()
+            graph = graph.coalesce()
             graph_weight = graph._values() * edge_weight
             graph_weight = torch.sparse_coo_tensor(graph.indices(), graph_weight,
                                                    graph.shape)
@@ -184,7 +185,7 @@ class HANLayer(nn.Module):
         The output feature
     """
 
-    def __init__(self, num_meta_paths, in_size, out_size, layer_num_heads, dropout):
+    def __init__(self, num_meta_paths, in_size, out_size, layer_num_heads, dropout, use_uniform_attention: bool = False, uniform_weights=None):
         super(HANLayer, self).__init__()
 
         self.is_hetero_conv = True
