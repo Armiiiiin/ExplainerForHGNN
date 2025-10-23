@@ -366,7 +366,7 @@ class HANLayer(nn.Module):
         The output feature
     """
 
-    def __init__(self, num_meta_paths, in_size, out_size, layer_num_heads, dropout):
+    def __init__(self, num_meta_paths, in_size, out_size, layer_num_heads, dropout, use_uniform_attention: bool = False):
         super(HANLayer, self).__init__()
 
         self.is_hetero_conv = True
@@ -379,6 +379,7 @@ class HANLayer(nn.Module):
                                            allow_zero_in_degree=True))
         self.semantic_attention = SemanticAttention(in_size=out_size * layer_num_heads)
         self.num_meta_paths = num_meta_paths
+        self.use_uniform_attention = use_uniform_attention
 
     def forward(self, gs, h, gat_attention=False, semantic_attention=False):
         semantic_embeddings = []
@@ -411,7 +412,16 @@ class HANLayer(nn.Module):
             beta = torch.full((N, M, 1), 1.0 / M, device=semantic_embeddings.device)
             output = (beta * semantic_embeddings).sum(1)
             print("HAN: Using uniform attention")
-            return output
+            if semantic_attention:
+                if not gat_attention:
+                    return output, beta # shape of beta should be consistent with the original beta_copy when attention=True, which is (N, M, 1)
+                else:
+                    return output, beta, gat_attention_weights
+            else:
+                if not gat_attention:
+                    return output
+                else:
+                    return output, gat_attention_weights
 
         if semantic_attention:
             output, beta = self.semantic_attention(semantic_embeddings, attention=True)
