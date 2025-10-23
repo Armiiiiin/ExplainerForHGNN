@@ -27,5 +27,6 @@
   "summary_path": "model_summary/HAN_GCN_ACM_summary.json",
   "device": 0,
   "weight_path": "model_weights/HAN_GCN_ACM.pth",
-  "attention_path": "model_attention/HAN_GCN_ACM_attention.pkl"
+  "attention_path": "model_attention/HAN_GCN_ACM_attention.pkl",
+  "uniform_attention": true
 }

@@ -403,7 +403,15 @@ class HANLayer(nn.Module):
                                                                        get_attention=True)
                 semantic_embeddings.append(semantic_embedding.flatten(1))
                 gat_attention_weights.append(attention)
-            semantic_embeddings = torch.stack(semantic_embeddings, dim=1)
+            semantic_embeddings = torch.stack(semantic_embeddings, dim=1) # (N, M, D)
+
+        # > Uniform Attention baseline
+        if getattr(self, "use_uniform_attention", False):
+            N, M, _ = semantic_embeddings.shape
+            beta = torch.full((N, M, 1), 1.0 / M, device=semantic_embeddings.device)
+            output = (beta * semantic_embeddings).sum(1)
+            print("HAN: Using uniform attention")
+            return output
 
         if semantic_attention:
             output, beta = self.semantic_attention(semantic_embeddings, attention=True)
@@ -448,22 +456,26 @@ class HAN(BaseModel):
         self.prepare_modules()
         self.to(self.device)
         self.support_multi_features = True
+        self.use_uniform_attention = use_uniform_attention
 
     def prepare_modules(self):
+        use_uniform = self.config.get("uniform_attention", False)
         self.layers = nn.ModuleList()
         self.layers.append(
             HANLayer(num_meta_paths=self.num_meta_paths,
                      in_size=self.dataset.num_features,
                      out_size=self.config['hidden_units'],
                      layer_num_heads=self.config['num_heads'][0],
-                     dropout=self.config['dropout']))
+                     dropout=self.config['dropout'],
+                     use_uniform_attention=use_uniform))
         for l in range(1, len(self.config['num_heads'])):
             self.layers.append(HANLayer(num_meta_paths=self.num_meta_paths,
                                         in_size=self.config['hidden_units'] *
                                                 self.config['num_heads'][l - 1],
                                         out_size=self.config['hidden_units'],
                                         layer_num_heads=self.config['num_heads'][l],
-                                        dropout=self.config['dropout']))
+                                        dropout=self.config['dropout']),
+                                        use_uniform_attention=use_uniform)
         self.predict = nn.Linear(
             self.config['hidden_units'] * self.config['num_heads'][-1],
             self.dataset.num_classes)
